@@ -1,0 +1,122 @@
+---
+title: 'Sobol Sensitivity Analysis'
+author: "Clarissa Boyajian"
+date: '`r format(Sys.time(), "%m/%d/%Y")`'
+output: 
+  pdf_document:
+    toc: false
+    number_sections: yes
+header-includes:
+  - \setlength{\parindent}{1em}
+  - \usepackage{float}
+---
+
+# Load Libraries
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load packages
+packages = c("tidyverse", "here",
+             "pse", "sensitivity")
+
+for (i in packages) {
+  if (require(i, character.only = TRUE) == FALSE) {
+    install.packages(i, repos = 'http://cran.us.r-project.org')
+  } else {
+    require(i, character.only = TRUE)
+  }
+}
+
+#read in R scripts
+source("atm_conductance.R")
+```
+
+
+## Make 2 sets of parameters
+
+```{r}
+nsets = 100
+
+# make first random sample
+h <- runif(min = 9.5, max = 10.5, n = nsets)
+v <- rnorm(mean = 250, sd = 30, n = nsets)
+kd <- rnorm(mean = 0.7, sd = 0.7 * 0.01, n = nsets)
+ko <- rnorm(mean = 0.1, sd = 0.1 * 0.01, n = nsets)
+
+sample_1 = cbind.data.frame(h, v, kd, ko)
+
+# make 2nd random sample
+h <- runif(min = 9.5, max = 10.5, n = nsets)
+v <- rnorm(mean = 250, sd = 30, n = nsets)
+kd <- rnorm(mean = 0.7, sd = 0.7 * 0.01, n = nsets)
+ko <- rnorm(mean = 0.1, sd = 0.1 * 0.01, n = nsets)
+
+sample_2 = cbind.data.frame(h, v, kd, ko)
+```
+
+## Use Sobol to generate param df
+
+```{r}
+sens_atmos_conduction = sobolSalt(model = NULL, sample_1, sample_2, nboot = 100)
+```
+
+## Run param through model and put back into Sobol object
+
+```{r}
+parms = as.data.frame(sens_atmos_conduction$X)
+
+colnames(parms) = colnames(sample_1)
+
+# run Sobol sensitivity with model
+model_output = pmap_dbl(parms, atm_conductance)
+
+sens_atmos_conduction = sensitivity::tell(sens_atmos_conduction, 
+                                          model_output, 
+                                          res.names = "ga")
+```
+
+
+```{r}
+# main effect:  partitions variance (main effect without co-variance) - sums approximately to one
+sens_atmos_conduction$S
+
+# useful to add names
+row.names(sens_atmos_conduction$S) = colnames(parms)
+sens_atmos_conduction$S
+```
+
+
+```{r}
+# total effect - accounts for parameter interactions
+row.names(sens_atmos_conduction$T) = colnames(parms)
+sens_atmos_conduction$T
+```
+
+## Plot PRCC
+
+```{r}
+# make a data frame for plotting
+both = cbind.data.frame(parms,
+                        gs = sens_atmos_conduction$y)
+
+# look at response of conductance to the two most important variables
+ggplot(data = both, 
+       aes(x = v, 
+           y = gs, 
+           col = h)) +
+  geom_point() +
+  labs(y = "Conductance (mm/s)", 
+       x = "Windspeed")
+```
+
+
+
+
+
+
+
+
+
+
+

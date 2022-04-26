@@ -62,8 +62,8 @@ produces many outputs (e.g time series of streamflow))
 
 
 # read in the input data
-SB=read.table("../data/clim.txt")
-clim= SB
+SB = read.table(here("data/clim.txt"))
+clim = SB
 
 
 
@@ -130,10 +130,6 @@ ggplot(tmp,
   geom_boxplot() + 
   labs(y = "Yield (as anomoly)") +
   facet_wrap(~yield, scales = "free" )
-
-
-
-
 ```
 
 # Quantifying Sensitivity
