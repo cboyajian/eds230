@@ -1,0 +1,215 @@
+---
+title: "moredynamic"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(deSolve)
+library(here)
+
+source(here::here("Week6/dexppop.R"))
+source(here::here("Week6/exppop.R"))
+source(here::here("Week6/dexppop_play.R"))
+source(here::here("Week6/discrete_logistic_pop.R"))
+```
+
+# additional parameters 
+
+You can play a bit with changing your function to something that you can't integrate "by hand"
+
+BUT we might want more parameters
+
+to work with ODE,
+parameters must all be input as a single list; similar to how we return multiple outputs from a function
+
+see example below..lets add a carrying capacity
+
+# R code with carrying capacity
+
+```{r}
+# create parameter list
+initialrabbits <- 20
+years <- seq(from = 1, to = 100, by = 2)
+parms <- c(0.01)
+
+# apply solver
+results <- ode(y = initialrabbits, times = years, 
+              func = dexppop, parms = parms)
+head(results)
+```
+
+
+```{r}
+# add more meaningful names
+colnames(results) <- c("year","P")
+
+# plot
+ggplot(as.data.frame(results), 
+       aes(x = year, 
+           y = P)) + 
+  geom_point() + 
+  labs(y = "Population", 
+       x = "years")
+```
+
+
+```{r}
+# try again with different parameters
+alternativeparms <- c(0.05)
+
+results_2 <- ode(y = initialrabbits, times = years, 
+                func = dexppop, parms = alternativeparms)
+
+# look at results
+head(results_2)
+```
+
+
+```{r}
+colnames(results_2) = c("year","P_parm2")
+
+# plot
+ggplot(as.data.frame(results_2), 
+       aes(x = year, 
+           y = P_parm2)) + 
+  geom_point() + 
+  labs(y = "Population", 
+       x = "years")
+```
+
+
+```{r}
+# compare by combining into a single data frame
+both <- inner_join(x = as.data.frame(results), 
+                   y = as.data.frame(results_2))
+
+both_p <- both %>% 
+  pivot_longer(cols = 2:3,
+               names_to = "model", 
+               values_to = "P")
+  #gather(key = "model", value = "P", -year) # could use pivot_longer instead of gather
+
+ggplot(both_p, 
+       aes(x = year,
+           y = P, 
+           col = model)) + 
+  geom_point() + 
+  labs(y = "Population", "years")
+
+# try playing on your own - modify the function in some way
+```
+
+# Difference Equations 
+
+What is ODE doing? (iterating in 'smart ways')
+
+Similar to "difference equations"
+
+## Difference Equations
+
+Population models can be discrete (rather than continuous)
+So we could implement them as difference equations and iterate
+
+
+```{r iteratie}
+# how many rabbits after 50 years given a growth of 0.1
+# starting with 1 rabbit - but a carrying capacity of 500
+
+# lets also keep the parameters for use later
+P0 <- 1
+r <- 0.05
+K <- 200
+T <- 50
+
+discrete_result <- discrete_logistic_pop(P0 = 1, r = 0.05, K = 200, T = 50)
+discrete_result
+```
+
+
+# Differential Equation, Difference (Iteration by hand) comparison
+
+Remember we have 3 ways now to calculate population
+
+analytical solution - based on integration (exppop.R) BEST
+
+using an ode solver for numerical approximation (exppop_play.R)
+
+numerical integration using in discrete steps (discrete_logistic_pop.R)
+```{r closed}
+analytic_result <- exppop(P0 = P0, r = r, K = K, T = T)
+
+analytic_result
+discrete_result
+# why are they different
+# look at trajectories
+```
+
+
+```{r closed}
+growth_result <- data.frame(time = seq(from = 1, to = 100))
+
+growth_result$Panalytic <- 
+  growth_result$time %>% 
+  map_dbl(~exppop( P0 = 1, r = 0.05, K = 200, T = .x ))
+
+growth_result$Pdiscrete <- 
+  growth_result$time %>% 
+  map_dbl(~discrete_logistic_pop( P0 = 1, r = 0.05, K = 200, T = .x ))
+
+tmp <- 
+  growth_result %>% 
+  gather(key = "Ptype", value = "P", -time)
+
+ggplot(data = tmp, 
+       aes(x = time, 
+           y = P, 
+           col = Ptype)) + 
+  geom_point()
+
+# try running them for longer time periods to see what happens 
+# change the value of r, K , P0 - see how it effects the results
+```
+
+# Compare analytical, difference and ODE
+
+Finally look at continuous derivative using ODE solve
+Needs
+*initial condtions
+*differential equation
+*parameters
+
+```{r}
+# set up using the same parameters
+pcompare <- list(r = r, carry_capacity = K)
+
+# now run our ODE solver
+result <- ode(P0, growth_result$time, dexppop_play, pcompare)
+head(result)
+```
+
+
+```{r}
+# we already have time - so just extract population
+growth_result$Pdifferential <- result[,2]
+
+# comapre all 3 approaches
+tmp <- 
+  growth_result %>% 
+  gather(key = "Ptype",value="P",-time)
+
+ggplot(data = tmp, 
+       aes(x = time, 
+           y = P, 
+           col = Ptype)) + 
+  geom_point()
+
+# notice Pdifferential is closer to Panalytic than Pdiscrete
+```
+
+
+
+
+
